@@ -1,5 +1,5 @@
 /* generated for 2022.3.20f1 */
-#![allow(non_upper_case_globals)]
+#![allow(non_upper_case_globals, non_snake_case)]
 use super::{symbols, types::*};
 use once_cell::sync::Lazy;
 

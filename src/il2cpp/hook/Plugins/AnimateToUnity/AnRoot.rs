@@ -12,7 +12,7 @@ use crate::{
 };
 
 use super::{
-    AnMeshInfoParameterGroup, AnMeshParameter, AnMeshParameterGroup, AnMotionParameter, AnMotionParameterGroup,
+    AnMeshInfoParameterGroup, AnMeshInfoParameter, AnMeshParameter, AnMeshParameterGroup, AnMotionParameter, AnMotionParameterGroup,
     AnObjectParameterBase, AnRootParameter, AnTextParameter
 };
 
@@ -41,7 +41,9 @@ pub fn get__topObject(this: *mut Il2CppObject) -> *mut Il2CppObject {
 #[derive(Deserialize)]
 pub struct AnRootData {
     #[serde(default)]
-    motion_parameter_list: FnvHashMap<i32, AnMotionParameterData>
+    motion_parameter_list: FnvHashMap<i32, AnMotionParameterData>,
+    #[serde(default)]
+    mesh_parameter_list: FnvHashMap<String, AnMeshInfoParameterData>
 }
 
 #[derive(Deserialize)]
@@ -70,6 +72,15 @@ struct AnTextParameterData {
 struct AnPlaneParameterData {
     #[serde(flatten)]
     base: AnObjectParameterBaseData
+}
+
+#[derive(Deserialize)]
+struct AnMeshInfoParameterData {
+    uv_offset: Option<Vector2_t>,
+    uv_size: Option<Vector2_t>,
+    size: Option<Vector2_t>,
+    offset: Option<Vector2_t>,
+    rotated: Option<bool>
 }
 
 pub fn on_LoadAsset(bundle: *mut Il2CppObject, this: *mut Il2CppObject, name: &Utf16Str) {
@@ -119,72 +130,135 @@ pub fn patch_asset(this: *mut Il2CppObject, data_opt: Option<&AnRootData>) {
     /*** Asset data patches ***/
     if let Some(data) = data_opt {
         // quick escape!!!11
-        if data.motion_parameter_list.is_empty() {
+        if data.motion_parameter_list.is_empty() && data.mesh_parameter_list.is_empty() {
             return;
         }
 
-        let root_param = get__parameter(this);
-        let motion_param_group = AnRootParameter::get__motionParameterGroup(root_param);
-        let Some(motion_param_list) = IList::new(AnMotionParameterGroup::get__motionParameterList(motion_param_group)) else {
+        /*** Mesh parameter patches ***/
+        if !data.mesh_parameter_list.is_empty() {
+            patch_mesh_parameters(this, &data.mesh_parameter_list);
+        }
+
+        /*** Motion parameter patches ***/
+        if !data.motion_parameter_list.is_empty() {
+            patch_motion_parameters(this, &data.motion_parameter_list);
+        }
+    }
+}
+
+fn patch_mesh_parameters(this: *mut Il2CppObject, mesh_parameter_list: &FnvHashMap<String, AnMeshInfoParameterData>) {
+    let param_group = get__meshParameterGroup(this);
+    let Some(param_list) = IList::new(AnMeshParameterGroup::get__meshParameterList(param_group)) else {
+        return;
+    };
+
+    for param in param_list.iter() {
+        let Some(group_list) = IList::new(AnMeshParameter::get__meshParameterGroupList(param)) else {
             return;
         };
 
-        for (i, motion_param_data) in data.motion_parameter_list.iter() {
-            // quick escape!!!11
-            if motion_param_data.text_param_list.is_empty() && motion_param_data.plane_param_list.is_empty() {
-                continue;
-            }
-
-            let Some(motion_param) = motion_param_list.get(*i) else {
-                warn!("motion param {} out of range (max {})", *i, motion_param_list.count());
+        for group in group_list.iter() {
+            let Some(mesh_param_list) = IList::new(AnMeshParameterGroup::get__meshParameterList(group)) else {
+                warn!("Failed to get mesh_param_list for mesh parameter group");
                 continue;
             };
 
-            if !motion_param_data.text_param_list.is_empty() {
-                let Some(text_param_list) = IList::new(AnMotionParameter::get__textParamList(motion_param)) else {
-                    warn!("Failed to get text_param_list for motion param {}", *i);
-                     continue;
-                 };
+            // Iterate through all mesh info parameters and patch them by texture name
+            for mesh_param in mesh_param_list.iter() {
+                let texture_name = AnMeshInfoParameter::get__textureName(mesh_param);
                 
-                for (j, text_param_data) in motion_param_data.text_param_list.iter() {
-                    let Some(text_param) = text_param_list.get(*j) else {
-                        warn!("text param {} of motion param {} out of range (max {})", *j, *i, text_param_list.count());
-                        continue;
-                    };
-
-                    if let Some(text) = &text_param_data.text {
-                        AnTextParameter::set__text(text_param, text.to_il2cpp_string());
+                if let Some(mesh_data) = mesh_parameter_list.get(&texture_name) {
+                    // Patch UV coordinates (texture atlas position)
+                    if let Some(uv_offset) = &mesh_data.uv_offset {
+                        AnMeshInfoParameter::set__uvOffset(mesh_param, uv_offset);
                     }
 
-                    if let Some(position_offset) = &text_param_data.base.position_offset {
-                        AnObjectParameterBase::set__positionOffset(text_param, position_offset);
+                    if let Some(uv_size) = &mesh_data.uv_size {
+                        AnMeshInfoParameter::set__uvSize(mesh_param, uv_size);
                     }
-                                                                        
-                    if let Some(scale) = &text_param_data.base.scale {
-                        AnObjectParameterBase::set__scale(text_param, scale);
+
+                    // Patch mesh size (text/element dimensions in pixels)
+                    if let Some(size) = &mesh_data.size {
+                        AnMeshInfoParameter::set__size(mesh_param, size);
+                    }
+
+                    // Patch mesh offset (center position)
+                    if let Some(offset) = &mesh_data.offset {
+                        AnMeshInfoParameter::set__offset(mesh_param, offset);
+                    }
+
+                    // Patch rotation flag (if texture is rotated 90 degrees)
+                    if let Some(rotated) = &mesh_data.rotated {
+                        AnMeshInfoParameter::set__rotated(mesh_param, *rotated);
                     }
                 }
             }
+        }
+    }
+}
 
-            if !motion_param_data.plane_param_list.is_empty() {
-                let Some(plane_param_list) = IList::new(AnMotionParameter::get__planeParamList(motion_param)) else {
-                    warn!("Failed to get plane_param_list for motion param {}", *i);
+fn patch_motion_parameters(this: *mut Il2CppObject, motion_parameter_list: &FnvHashMap<i32, AnMotionParameterData>) {
+    let root_param = get__parameter(this);
+    let motion_param_group = AnRootParameter::get__motionParameterGroup(root_param);
+    let Some(motion_param_list) = IList::new(AnMotionParameterGroup::get__motionParameterList(motion_param_group)) else {
+        return;
+    };
+
+    for (i, motion_param_data) in motion_parameter_list.iter() {
+        // quick escape!!!11
+        if motion_param_data.text_param_list.is_empty() && motion_param_data.plane_param_list.is_empty() {
+            continue;
+        }
+
+        let Some(motion_param) = motion_param_list.get(*i) else {
+            warn!("motion param {} out of range (max {})", *i, motion_param_list.count());
+            continue;
+        };
+
+        if !motion_param_data.text_param_list.is_empty() {
+            let Some(text_param_list) = IList::new(AnMotionParameter::get__textParamList(motion_param)) else {
+                warn!("Failed to get text_param_list for motion param {}", *i);
+                 continue;
+             };
+            
+            for (j, text_param_data) in motion_param_data.text_param_list.iter() {
+                let Some(text_param) = text_param_list.get(*j) else {
+                    warn!("text param {} of motion param {} out of range (max {})", *j, *i, text_param_list.count());
                     continue;
                 };
 
-                for (j, plane_param_data) in motion_param_data.plane_param_list.iter() {
-                    let Some(plane_param) = plane_param_list.get(*j) else {
-                        warn!("plane param {} of motion param {} out of range (max {})", *j, *i, plane_param_list.count());
-                        continue;
-                    };
+                if let Some(text) = &text_param_data.text {
+                    AnTextParameter::set__text(text_param, text.to_il2cpp_string());
+                }
 
-                    if let Some(position_offset) = &plane_param_data.base.position_offset {
-                        AnObjectParameterBase::set__positionOffset(plane_param, position_offset);
-                    }
-                                                                        
-                    if let Some(scale) = &plane_param_data.base.scale {
-                        AnObjectParameterBase::set__scale(plane_param, scale);
-                    }
+                if let Some(position_offset) = &text_param_data.base.position_offset {
+                    AnObjectParameterBase::set__positionOffset(text_param, position_offset);
+                }
+                                                                    
+                if let Some(scale) = &text_param_data.base.scale {
+                    AnObjectParameterBase::set__scale(text_param, scale);
+                }
+            }
+        }
+
+        if !motion_param_data.plane_param_list.is_empty() {
+            let Some(plane_param_list) = IList::new(AnMotionParameter::get__planeParamList(motion_param)) else {
+                warn!("Failed to get plane_param_list for motion param {}", *i);
+                continue;
+            };
+
+            for (j, plane_param_data) in motion_param_data.plane_param_list.iter() {
+                let Some(plane_param) = plane_param_list.get(*j) else {
+                    warn!("plane param {} of motion param {} out of range (max {})", *j, *i, plane_param_list.count());
+                    continue;
+                };
+
+                if let Some(position_offset) = &plane_param_data.base.position_offset {
+                    AnObjectParameterBase::set__positionOffset(plane_param, position_offset);
+                }
+                                                                    
+                if let Some(scale) = &plane_param_data.base.scale {
+                    AnObjectParameterBase::set__scale(plane_param, scale);
                 }
             }
         }

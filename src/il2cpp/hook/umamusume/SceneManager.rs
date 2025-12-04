@@ -1,6 +1,6 @@
 use std::sync::atomic::{self, AtomicBool};
 
-use crate::{il2cpp::{symbols::get_method_addr, types::*}, windows::wnd_hook};
+use crate::il2cpp::{symbols::get_method_addr, types::*};
 
 static SPLASH_SHOWN: AtomicBool = AtomicBool::new(false);
 pub fn is_splash_shown() -> bool {

@@ -4,13 +4,35 @@ use fnv::FnvHashMap;
 use once_cell::sync::Lazy;
 use widestring::Utf16Str;
 
-use crate::{core::{ext::Utf16StringExt, hachimi::AssetMetadata}, il2cpp::{
+use crate::{core::{ext::Utf16StringExt, hachimi::{AssetMetadata, Hachimi}}, il2cpp::{
     api::il2cpp_resolve_icall, ext::{Il2CppObjectExt, Il2CppStringExt}, hook::{
         umamusume::{StoryRaceTextAsset, StoryTimelineData, TextDotData, TextRubyData},
         Cute_UI_Assembly::AtlasReference,
         UnityEngine_CoreModule::{GameObject, Texture2D}
     }, symbols::GCHandle, types::*
 }};
+
+#[cfg(target_os = "windows")]
+use windows::{Win32::System::Diagnostics::Debug::OutputDebugStringW, core::PCWSTR};
+
+fn debug_output(msg: &str) {
+    // Only output if debug_mode is enabled in runtime config
+    if Hachimi::is_initialized() && Hachimi::instance().config.load().debug_mode {
+        #[cfg(target_os = "windows")]
+        {
+            // Use Windows Debug Output for DebugView++
+            let wide_msg = widestring::WideCString::from_str(msg).unwrap_or_default();
+            unsafe {
+                OutputDebugStringW(PCWSTR(wide_msg.as_ptr()));
+            }
+        }
+        #[cfg(not(target_os = "windows"))]
+        {
+            // Use println for other platforms (Android, etc.)
+            println!("[Hachimi Bundle] {}", msg);
+        }
+    }
+}
 
 pub const ASSET_PATH_PREFIX: &str = "assets/_gallopresources/bundle/resources/";
 
@@ -35,6 +57,11 @@ pub fn check_asset_bundle_name(this: *mut Il2CppObject, metadata: &AssetMetadata
         if let Some(bundle_path) = get_bundle_path(this) {
             let bundle_name = unsafe { (*bundle_path).as_utf16str().path_filename() };
             if !bundle_name.str_eq(&meta_bundle_name) {
+                debug_output(&format!(
+                    "[BUNDLE] [FAIL] [bundle mismatch: expected {} got {}]",
+                    meta_bundle_name,
+                    bundle_name
+                ));
                 warn!("Expected bundle {}, got {}", meta_bundle_name, bundle_name);
                 return false;
             }
@@ -46,7 +73,17 @@ pub fn check_asset_bundle_name(this: *mut Il2CppObject, metadata: &AssetMetadata
 
 type LoadAssetFn = extern "C" fn(this: *mut Il2CppObject, name: *mut Il2CppString, type_: *mut Il2CppObject) -> *mut Il2CppObject;
 extern "C" fn LoadAsset_Internal(this: *mut Il2CppObject, name: *mut Il2CppString, type_: *mut Il2CppObject) -> *mut Il2CppObject {
+    let asset_name = unsafe { (*name).as_utf16str().to_string() };
+    debug_output(&format!("[ASSET] call: {}", asset_name));
+    
     let asset = get_orig_fn!(LoadAsset_Internal, LoadAssetFn)(this, name, type_);
+    
+    if !asset.is_null() {
+        debug_output(&format!("[ASSET] [OK] {}", asset_name));
+    } else {
+        debug_output(&format!("[ASSET] [FAIL] [asset not found in bundle] {}", asset_name));
+    }
+    
     on_LoadAsset(this, asset, name);
     asset
 }
@@ -101,9 +138,18 @@ pub fn on_LoadAsset(bundle: *mut Il2CppObject, asset: *mut Il2CppObject, name: *
 
 type LoadFromFileInternalFn = extern "C" fn(path: *mut Il2CppString, crc: u32, offset: u64) -> *mut Il2CppObject;
 extern "C" fn LoadFromFile_Internal(path: *mut Il2CppString, crc: u32, offset: u64) -> *mut Il2CppObject {
+    let path_str = unsafe { (*path).as_utf16str().to_string() };
+    // Extract just the bundle hash from the path
+    let bundle_hash = path_str.split('/').last().unwrap_or(&path_str);
+    debug_output(&format!("[BUNDLE] load: {}", path_str));
+    
     let bundle = get_orig_fn!(LoadFromFile_Internal, LoadFromFileInternalFn)(path, crc, offset);
+    
     if !bundle.is_null() {
+        debug_output(&format!("[BUNDLE] [OK] [bundle found: {}]", bundle_hash));
         BUNDLE_PATHS.lock().unwrap().insert(bundle as usize, GCHandle::new(path as _, false));
+    } else {
+        debug_output(&format!("[BUNDLE] [FAIL] [bundle not found: {}]", bundle_hash));
     }
     bundle
 }

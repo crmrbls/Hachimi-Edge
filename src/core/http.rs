@@ -87,7 +87,7 @@ pub fn download_file_parallel(url: &str, file_path: &Path, num_threads: usize,
     let accepts_ranges = res.header("Accept-Ranges").map_or(false, |v| v == "bytes");
 
     if let (Some(length), true) = (content_length, accepts_ranges) {
-        let mut downloaded_file = fs::File::create(file_path)?;
+        let downloaded_file = fs::File::create(file_path)?;
         downloaded_file.set_len(length)?;
         drop(downloaded_file);
 

@@ -150,7 +150,7 @@ impl TextDataQuery {
         }
     }
 
-    fn get_skill_desc(mut index: i32) -> Option<*mut Il2CppString> {
+    fn get_skill_desc(index: i32) -> Option<*mut Il2CppString> {
         let localized_data = Hachimi::instance().localized_data.load();
         let text_opt = localized_data
             .text_data_dict

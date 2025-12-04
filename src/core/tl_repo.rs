@@ -406,7 +406,7 @@ impl Updater {
         cached_files: Arc<Mutex<FnvHashMap<String, String>>>
     ) -> Result<usize, Error> {
         let zip_path = localized_data_dir.join(".tmp.zip");
-        let mut error_count = 0;
+        let mut error_count;
 
         {
             let total_size_header = ureq::agent().head(&update_info.zip_url).call()

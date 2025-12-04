@@ -1,3 +1,7 @@
 /build
 /target
 /.vscode
+dump.cs
+.github/copilot-instructions.md
+Cargo.lockdump.cs
+.github/workflows/copilot-instructions.md

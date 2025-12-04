@@ -65,6 +65,7 @@ notification:
   errors_during_update: "更新过程中出现 %{count} 个错误，详情请参阅日志"
   checking_for_updates: "正在检查更新..."
   no_updates: "无可用更新"
+  ipc_softreset_exec: "已远程软重启（IPC）"
   press_to_set_menu_key: "请在游戏窗口按下新的按键以设为打开菜单按键"
   menu_open_key_set: "已设置打开菜单按键为 %{key}"
 
@@ -92,7 +93,7 @@ first_time_setup:
 
 about:
   title: "关于"
-  copyright: "© 2024-%{year} LeadRDRK 及贡献者"
+  copyright: "© 2024-2025 LeadRDRK 及贡献者"
   view_license: "查看许可证"
   check_for_updates: "检查更新"
 

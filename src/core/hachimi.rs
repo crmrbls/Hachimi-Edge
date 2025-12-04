@@ -123,7 +123,7 @@ impl Hachimi {
         })
     }
 
-    fn load_config(data_dir: &Path, region: &Region) -> Result<Config, Error> {
+    fn load_config(data_dir: &Path, _region: &Region) -> Result<Config, Error> {
         let config_path = data_dir.join("config.json");
         if fs::metadata(&config_path).is_ok() {
             let json = fs::read_to_string(&config_path)?;
