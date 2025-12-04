@@ -71,6 +71,7 @@ static mut DISABLED_GAME_UIS: once_cell::unsync::Lazy<FnvHashSet<*mut crate::il2
 
 impl Gui {
     // Call this from the render thread!
+    #[allow(unused_variables)]
     pub fn instance_or_init(open_key_id: &str) -> &Mutex<Gui> {
         if let Some(instance) = INSTANCE.get() {
             return instance;
