@@ -85,14 +85,38 @@ struct AnMeshInfoParameterData {
 
 pub fn on_LoadAsset(bundle: *mut Il2CppObject, this: *mut Il2CppObject, name: &Utf16Str) {
     // SAFETY: The asset path has been checked prior to this being called in GameObject::on_LoadAsset
-    let base_path = name[AssetBundle::ASSET_PATH_PREFIX.len()..].path_basename();
+    let asset_path = &name[AssetBundle::ASSET_PATH_PREFIX.len()..];
+    let filename = asset_path.path_basename();
+    
+    info!("[AnRoot] Loading asset: {:?}, filename: {:?}", name.to_string(), filename.to_string());
 
     let localized_data = Hachimi::instance().localized_data.load();
-    let asset_info: AssetInfo<AnRootData> = localized_data.load_asset_info(&base_path.to_string());
+    
+    // Try to load asset config from multiple locations
+    // Priority 1: Direct path (e.g., sourceresources/flash/footer/.../as_uMeshParam_*.json)
+    // Priority 2: an_texture_sets (e.g., an_texture_sets/as_uMeshParam_*/as_uMeshParam_*.json)
+    let asset_info: AssetInfo<AnRootData> = if asset_path.starts_with("sourceresources/") {
+        localized_data.load_asset_info(&asset_path.to_string())
+    } else {
+        // For uianimation assets, try an_texture_sets first, then basename
+        let texture_sets_path = format!("an_texture_sets/{}/{}.json", 
+            filename.to_string(), 
+            filename.to_string());
+        if localized_data.get_assets_path(&texture_sets_path).is_some() {
+            localized_data.load_asset_info(&texture_sets_path)
+        } else {
+            localized_data.load_asset_info(&filename.to_string())
+        }
+    };
+    
+    info!("[AnRoot] Asset info loaded. Bundle name from metadata: {:?}", asset_info.metadata_ref());
+    
     if !AssetBundle::check_asset_bundle_name(bundle, asset_info.metadata_ref()) {
+        info!("[AnRoot] Bundle name mismatch! Expected: {:?}, actual bundle: {}", asset_info.metadata_ref(), "?");
         return;
     }
 
+    info!("[AnRoot] Patching asset...");
     patch_asset(this, asset_info.data.as_ref());
 }
 

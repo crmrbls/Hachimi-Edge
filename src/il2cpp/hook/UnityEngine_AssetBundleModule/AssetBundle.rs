@@ -56,6 +56,11 @@ pub fn check_asset_bundle_name(this: *mut Il2CppObject, metadata: &AssetMetadata
     if let Some(meta_bundle_name) = &metadata.bundle_name {
         if let Some(bundle_path) = get_bundle_path(this) {
             let bundle_name = unsafe { (*bundle_path).as_utf16str().path_filename() };
+            debug_output(&format!(
+                "[BUNDLE] Check: expected='{}' vs actual='{}'",
+                meta_bundle_name,
+                bundle_name
+            ));
             if !bundle_name.str_eq(&meta_bundle_name) {
                 debug_output(&format!(
                     "[BUNDLE] [FAIL] [bundle mismatch: expected {} got {}]",
@@ -66,6 +71,8 @@ pub fn check_asset_bundle_name(this: *mut Il2CppObject, metadata: &AssetMetadata
                 return false;
             }
         }
+    } else {
+        debug_output("[BUNDLE] No bundle_name in metadata, skipping check");
     }
 
     true

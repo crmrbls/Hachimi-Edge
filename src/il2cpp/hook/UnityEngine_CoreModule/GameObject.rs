@@ -60,6 +60,12 @@ pub fn on_LoadAsset(bundle: *mut Il2CppObject, this: *mut Il2CppObject, name: &U
             AnRoot::on_LoadAsset(bundle, root, name);
         }
     }
+    else if path.starts_with("sourceresources/flash/") {
+        let root = GetComponentInChildren(this, AnRoot::type_object(), false);
+        if !root.is_null() {
+            AnRoot::on_LoadAsset(bundle, root, name);
+        }
+    }
     else if path.starts_with("uianimation/flashcombine/") {
         let player = GetComponentInChildren(this, FlashActionPlayer::type_object(), false);
         if !player.is_null() {
